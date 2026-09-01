@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Face Unlock System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <!-- ═══════════════════════════════════ NAVBAR ══════════════════════════════════ -->
+    <header class="navbar">
+        <div class="logo-area">
+            <div class="shield-icon" id="navLockIcon">🔒</div>
+            <div>
+                <h1>AI FACE UNLOCK</h1>
+                <span class="subtitle">Personalized Biometric Workspaces</span>
+            </div>
+        </div>
+        <div class="nav-right" id="navRightStatus" style="display: none;">
+            <div class="status-badge" id="systemStatusBadge">
+                <span class="pulse-dot" id="statusDot"></span>
+                <span id="systemStatusText">LOCKED</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="app-container">
+
+        <!-- ========================================================================= -->
+        <!-- PAGE 1: LANDING / WELCOME -->
+        <!-- ========================================================================= -->
+        <main id="page-landing" class="page-view active">
+            <div class="landing-content">
+                <div class="glow-orb"></div>
+                <h1 class="landing-title">Hi, welcome to AI Face Unlock</h1>
+                <p class="landing-desc">Your face is the key to your personal workspace. Secure, lightning-fast, and personalized.</p>
+                <button class="btn btn-accent btn-large" onclick="navigateTo('scanner')">
+                    <span class="icon">📷</span> Scan Face to Enter
+                </button>
+            </div>
+        </main>
+
+        <!-- ========================================================================= -->
+        <!-- PAGE 2: SCANNER & REGISTRATION -->
+        <!-- ========================================================================= -->
+        <main id="page-scanner" class="page-view dashboard-grid">
+            
+            <!-- Camera Card -->
+            <section class="card camera-card">
+                <div class="card-header">
+                    <h2>Face Scanner</h2>
+                    <button class="btn btn-outline btn-sm" onclick="navigateTo('landing')">← Back</button>
+                </div>
+
+                <!-- Scanner Frame Wrapper -->
+                <div class="scanner-wrapper">
+                    <!-- Live feed -->
+                    <img src="{{ url_for('video_feed') }}" alt="Webcam Feed" id="videoFeed" class="video-feed">
+
+                    <!-- Scanning line -->
+                    <div class="scan-line" id="scanLine"></div>
+
+                    <!-- Face frame / QR-style brackets -->
+                    <div class="face-frame" id="faceFrame">
+                        <span class="corner tl"></span>
+                        <span class="corner tr"></span>
+                        <span class="corner bl"></span>
+                        <span class="corner br"></span>
+
+                        <!-- Pulsing detection ring -->
+                        <div class="detect-ring" id="detectRing"></div>
+
+                        <!-- Face icon guide -->
+                        <div class="face-guide" id="faceGuide">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                                <ellipse cx="50" cy="38" rx="22" ry="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-dasharray="5 3"/>
+                                <circle cx="41" cy="34" r="3" fill="currentColor" opacity="0.6"/>
+                                <circle cx="59" cy="34" r="3" fill="currentColor" opacity="0.6"/>
+                                <path d="M 40 46 Q 50 54 60 46" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+                                <line x1="50" y1="27" x2="50" y2="23" stroke="currentColor" stroke-width="2" opacity="0.5"/>
+                            </svg>
+                        </div>
+
+                        <!-- Status label inside frame -->
+                        <div class="frame-status" id="frameStatus">Position face in frame</div>
+                    </div>
+
+                    <!-- Full-width status banner at bottom -->
+                    <div class="status-banner" id="statusBanner">
+                        <span class="banner-icon" id="bannerIcon">🔒</span>
+                        <span class="banner-text" id="overlayMessage">Initializing Biometric Scan…</span>
+                    </div>
+                </div>
+
+                <!-- Liveness progress bar -->
+                <div class="liveness-bar-container">
+                    <div class="liveness-info">
+                        <span>Challenge: <strong id="currentChallenge">BLINK</strong></span>
+                        <span id="livenessStatus">Awaiting gesture…</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill" id="livenessProgress"></div>
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- Telemetry & Security Card -->
+            <section class="card metrics-card">
+                <div class="card-header"><h2>Biometric Telemetry</h2></div>
+                <div class="metric-group">
+                    <div class="metric-tile">
+                        <span class="metric-label">Match Score</span>
+                        <div class="metric-value" id="matchScore">0.000</div>
+                    </div>
+                    <div class="metric-tile">
+                        <span class="metric-label">Eye Aspect Ratio</span>
+                        <div class="metric-value" id="earMetric">0.000</div>
+                    </div>
+                    <div class="metric-tile">
+                        <span class="metric-label">Smile Ratio</span>
+                        <div class="metric-value" id="smileMetric">0.000</div>
+                    </div>
+                    <div class="metric-tile">
+                        <span class="metric-label">Head Yaw / Pitch</span>
+                        <div class="metric-value" id="poseMetric">0.0° / 0.0°</div>
+                    </div>
+                </div>
+                <div class="control-section">
+                    <h3>Security Mode</h3>
+                    <div class="btn-group">
+                        <button class="btn btn-outline active" id="btnModeNormal" onclick="setLivenessMode('BLINK')">Standard (Blink)</button>
+                        <button class="btn btn-outline" id="btnModeStrict" onclick="setLivenessMode('STRICT')">Strict (Blink + Smile)</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- System Instructions & Quick Register Card (No user list exposed) -->
+            <section class="card info-card">
+                <div class="card-header">
+                    <h2>Biometric Guidance</h2>
+                    <button class="btn btn-accent btn-sm" onclick="openRegisterModal()">+ Register Face</button>
+                </div>
+                <div class="guidance-list" style="display:flex;flex-direction:column;gap:.8rem;font-size:.85rem;color:var(--muted);">
+                    <div style="display:flex;align-items:center;gap:.6rem;">
+                        <span style="font-size:1.2rem;">🎯</span>
+                        <span>Position face centered within the scan frame.</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:.6rem;">
+                        <span style="font-size:1.2rem;">💡</span>
+                        <span>Ensure adequate, direct lighting on your face.</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:.6rem;">
+                        <span style="font-size:1.2rem;">😉</span>
+                        <span>Blink naturally to verify live human presence.</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:.6rem;">
+                        <span style="font-size:1.2rem;">🔒</span>
+                        <span>Identities and personal databases are encrypted &amp; private.</span>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- ========================================================================= -->
+        <!-- PAGE 3: PERSONAL DASHBOARD -->
+        <!-- ========================================================================= -->
+        <main id="page-dashboard" class="page-view">
+            <div class="dashboard-header">
+                <div class="user-welcome">
+                    <div class="avatar-ring">
+                        <span id="dashAvatar">👤</span>
+                    </div>
+                    <div>
+                        <h2 id="dashWelcomeText">Welcome back, User</h2>
+                        <span class="role-badge" id="dashRoleText">Role</span>
+                    </div>
+                </div>
+                <div style="display:flex;gap:.8rem;align-items:center;">
+                    <button class="btn btn-red btn-sm" onclick="lockSystemAndExit()">🔒 Lock &amp; Exit</button>
+                </div>
+            </div>
+
+            <div class="dashboard-content" style="display:flex;flex-direction:column;gap:1.5rem;">
+                <!-- Personal Links Card (Only for the face-verified user) -->
+                <div class="card full-width">
+                    <div class="card-header">
+                        <h2>My Personal Social & Web Shortcuts</h2>
+                        <button class="btn btn-accent btn-sm" onclick="openAddShortcutModal()">+ Add Link / Shortcut</button>
+                    </div>
+                    <div id="personalShortcutsGrid" class="shortcuts-grid">
+                        <!-- Populated dynamically based on user identity -->
+                    </div>
+                </div>
+
+                <!-- 1GB Storage Vault & PDF Drive -->
+                <div class="card full-width">
+                    <div class="card-header">
+                        <div>
+                            <h2>My Secure PDF &amp; Document Vault</h2>
+                            <div style="font-size:.78rem;color:var(--muted);margin-top:.2rem;">Plan Limit: 1.0 GB Storage per Identity</div>
+                        </div>
+                        <div style="display:flex;gap:.6rem;align-items:center;">
+                            <input type="file" id="vaultFileInput" style="display:none;" onchange="handleVaultUpload(this)">
+                            <button class="btn btn-accent btn-sm" onclick="document.getElementById('vaultFileInput').click()">📄 Upload PDF / Document</button>
+                        </div>
+                    </div>
+
+                    <!-- Storage Meter Bar -->
+                    <div style="margin-bottom:1.2rem;background:rgba(255,255,255,0.03);padding:.8rem;border-radius:12px;border:1px solid var(--card-border);">
+                        <div style="display:flex;justify-content:space-between;font-size:.82rem;margin-bottom:.4rem;color:var(--muted);">
+                            <span>Storage Allocation: <strong id="storageUsedText" style="color:var(--cyan);">0.0 MB</strong> / 1024 MB (1 GB)</span>
+                            <span id="storagePercentText">0.0%</span>
+                        </div>
+                        <div class="progress-track" style="height:8px;">
+                            <div class="progress-fill" id="storageProgressBar" style="width:0%;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Files Grid -->
+                    <div id="userVaultGrid" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:1rem;">
+                        <div class="empty-state">No PDF files or documents stored yet. Click Upload.</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+    </div>
+
+    <!-- ══════════════════════════════ MODALS ═════════════════════════════════════════ -->
+
+    <!-- Register User Modal -->
+    <div class="modal-backdrop hidden" id="registerModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>📸 Register New Identity</h3>
+                <button class="modal-close" onclick="closeRegisterModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-hint">Fill details, click <strong>Start Session</strong>, face the camera, and capture.</p>
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" id="regName" placeholder="e.g. Sainath" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label>Role</label>
+                    <select id="regRole">
+                        <option value="Admin">Admin</option>
+                        <option value="User" selected>User</option>
+                    </select>
+                </div>
+                <div class="reg-status" id="regStatus"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="btnRegStart" onclick="startRegistration()">▶ Start Session</button>
+                <button class="btn btn-green hidden" id="btnRegCapture" onclick="captureRegistration()">📸 Capture &amp; Save</button>
+                <button class="btn btn-red hidden" id="btnRegCancel" onclick="cancelRegistration()">✕ Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit User Modal -->
+    <div class="modal-backdrop hidden" id="editUserModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>✏️ Edit Identity</h3>
+                <button class="modal-close" onclick="closeEditUserModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editUserId">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="editUserName" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label>Role</label>
+                    <select id="editUserRole">
+                        <option value="Admin">Admin</option>
+                        <option value="User">User</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-accent" onclick="saveUserEdit()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Shortcut Modal -->
+    <div class="modal-backdrop hidden" id="addShortcutModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>🔗 Add Personal File/Link</h3>
+                <button class="modal-close" onclick="closeAddShortcutModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="scId">
+                <div class="form-group">
+                    <label>Title</label>
+                    <input type="text" id="scName" placeholder="e.g. My Resume" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label>URL (Link or Image/PDF Web Address)</label>
+                    <input type="url" id="scUrl" placeholder="https://...">
+                </div>
+                <div class="form-row">
+                    <div class="form-group" style="flex:1">
+                        <label>Type</label>
+                        <select id="scType">
+                            <option value="link">Web Link 🔗</option>
+                            <option value="pdf">PDF Document 📄</option>
+                            <option value="image">Personal Image 🖼️</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex:1">
+                        <label>Color</label>
+                        <input type="color" id="scColor" value="#4facfe">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-accent" onclick="saveShortcut()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast hidden" id="toast"></div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[codz]
+*$py.class
+
+# User Data & Private Biometric Files (NEVER COMMIT TO GIT)
+data/*.json
+data/*.csv
+data/*.xlsx
+data/faces/
+data/user_files/
+data/face_features.npy
+logs/*.json
+logs/*.log
+
+# AI Model Files (Downloaded on boot if missing)
+models/*.onnx
+
+# Deployment & Environment
+.env
+.env.local
+.vercel
+.render
+venv/
+.venv/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# IDE & OS Files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
