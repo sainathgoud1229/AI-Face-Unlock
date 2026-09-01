@@ -120,8 +120,22 @@ AI-Face-Unlock/
 
 
 
-## 🔒 Data Privacy & Security
+## 🔒 Enterprise Data Privacy & Security Architecture
 
-- **Strict Git Exclusions**: All sensitive user records, face crop photos, Excel spreadsheets, and uploaded PDFs in `data/` are excluded via `.gitignore`.
-- **Zero Browser Exposure**: Public download buttons for user databases are removed to prevent unauthorized data downloads from client browsers.
-- **Local Isolation**: All identity files are saved locally on disk at `c:\Users\SAINATH\github projects\AI-Face-Unlock-main\AI-Face-Unlock-main\data\users_database.xlsx`.
+The system is engineered with strict privacy-by-design principles to protect biometric identity data and personal user vaults:
+
+1. **Zero Client Data Exposure**:
+   - Public database listings and download controls are removed from client-side views to prevent unauthorized user data exfiltration across client browsers.
+
+2. **Isolated Server Storage (`./data/`)**:
+   - All enrolled biometric templates, face snapshot crops, personal document uploads, and Excel spreadsheets (`users_database.xlsx`) are stored locally within the application data directory (`./data/`).
+
+3. **Strict Version Control Exclusions (`.gitignore`)**:
+   - Comprehensive `.gitignore` rules strictly prevent local databases, raw face crop images, Excel/CSV spreadsheets, and uploaded PDFs from ever being committed to public Git repositories.
+
+4. **Biometric Access Gating**:
+   - Personal links, social shortcuts, and the 1GB Document Vault are loaded exclusively upon successful multi-gesture facial recognition matching (`SFace` threshold `0.363`).
+
+5. **Cloud Secret Management**:
+   - Optional cloud database synchronization with Supabase (`src/supabase_client.py`) uses encrypted REST endpoints with credentials managed via environment variables (`SUPABASE_URL`, `SUPABASE_KEY`).
+
