@@ -118,23 +118,7 @@ AI-Face-Unlock/
 └── wsgi.py                  # Web server WSGI entrypoint
 ```
 
----
 
-## ☁️ Cloud & Server Deployment
-
-### 🔴 Render Deployment (Full Video Streaming Support)
-1. Connect your repository to [Render](https://render.com).
-2. Create a new **Web Service**.
-3. Render automatically detects `render.yaml` and executes:
-   ```bash
-   gunicorn wsgi:app --bind 0.0.0.0:$PORT
-   ```
-
-### ⚡ Vercel Deployment
-1. Import repository into [Vercel](https://vercel.com).
-2. Vercel automatically applies `vercel.json` routing through `wsgi.py`.
-
----
 
 ## 🔒 Data Privacy & Security
 
