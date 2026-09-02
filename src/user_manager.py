@@ -44,6 +44,7 @@ class UserManager:
             with open(self.db_path, "w") as f:
                 json.dump(self.users, f, indent=2)
             self.export_csv()
+            self.export_excel()
         except Exception as e:
             print(f"[UserManager] DB save error: {e}")
 
