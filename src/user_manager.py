@@ -150,7 +150,47 @@ class UserManager:
             print(f"[UserManager] XLSX export error: {e}")
 
     def export_csv(self):
-        self.export_excel()
+        """Export only CSV (called by save_database alongside export_excel)."""
+        fieldnames = ["Faceid", "name", "Face Image", "Enrolled Date", "github", "Linkedin", "Instagram", "pds", "remaining"]
+        rows = []
+        for idx, u in enumerate(self.users.values(), start=1):
+            shortcuts = u.get("shortcuts", [])
+            user_files = u.get("files", [])
+            github_url = ""
+            linkedin_url = ""
+            instagram_url = ""
+            remaining_list = []
+            for sc in shortcuts:
+                s_name = sc.get("name", "").lower()
+                s_url = sc.get("url", "")
+                if "github" in s_name or "github.com" in s_url:
+                    github_url = s_url
+                elif "linkedin" in s_name or "linkedin.com" in s_url:
+                    linkedin_url = s_url
+                elif "instagram" in s_name or "instagram.com" in s_url:
+                    instagram_url = s_url
+                else:
+                    remaining_list.append(f"{sc.get('name')}: {s_url}")
+            pdf_list = "; ".join([f.get("name", "") for f in user_files])
+            rows.append({
+                "Faceid": idx,
+                "name": u.get("name", ""),
+                "Face Image": u.get("face_image", ""),
+                "Enrolled Date": u.get("registered_at", ""),
+                "github": github_url,
+                "Linkedin": linkedin_url,
+                "Instagram": instagram_url,
+                "pds": pdf_list,
+                "remaining": "; ".join(remaining_list),
+            })
+        try:
+            with open(self.csv_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                for r in rows:
+                    writer.writerow(r)
+        except Exception as e:
+            print(f"[UserManager] CSV export error: {e}")
 
 
     def add_file(self, user_id, filename, filepath, size_bytes):
