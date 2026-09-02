@@ -27,24 +27,27 @@ def ensure_models_exist():
 
 def load_ai_models():
     """Ensure models exist and return initialized YuNet Detector and SFace Recognizer."""
-    ensure_models_exist()
-    
-    # score_threshold=0.5, nms_threshold=0.3 for reliable face detection across all lighting conditions
-    detector = cv2.FaceDetectorYN_create(
-        config.YUNET_MODEL_PATH,
-        "",
-        (320, 320),
-        0.5, # score_threshold
-        0.3, # nms_threshold
-        5000
-    )
-    
-    recognizer = cv2.FaceRecognizerSF_create(
-        config.SFACE_MODEL_PATH,
-        ""
-    )
-    
-    return detector, recognizer
+    try:
+        ensure_models_exist()
+        
+        detector = cv2.FaceDetectorYN_create(
+            config.YUNET_MODEL_PATH,
+            "",
+            (320, 320),
+            0.5, # score_threshold
+            0.3, # nms_threshold
+            5000
+        )
+        
+        recognizer = cv2.FaceRecognizerSF_create(
+            config.SFACE_MODEL_PATH,
+            ""
+        )
+        
+        return detector, recognizer
+    except Exception as e:
+        print(f"[ModelLoader] Warning: Could not initialize AI models ({e}). Operating in basic mode.")
+        return None, None
 
 if __name__ == "__main__":
     ensure_models_exist()

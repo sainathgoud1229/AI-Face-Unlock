@@ -1,13 +1,28 @@
 import os
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODELS_DIR = os.path.join(BASE_DIR, "models")
-DATA_DIR = os.path.join(BASE_DIR, "data")
-LOGS_DIR = os.path.join(BASE_DIR, "logs")
+import tempfile
 
-# Ensure directories exist
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Detect if running in read-only environment like Vercel Serverless
+IS_VERCEL = os.environ.get("VERCEL") == "1" or not os.access(BASE_DIR, os.W_OK)
+
+if IS_VERCEL:
+    TEMP_DIR = tempfile.gettempdir()
+    MODELS_DIR = os.path.join(TEMP_DIR, "models")
+    DATA_DIR = os.path.join(TEMP_DIR, "data")
+    LOGS_DIR = os.path.join(TEMP_DIR, "logs")
+else:
+    MODELS_DIR = os.path.join(BASE_DIR, "models")
+    DATA_DIR = os.path.join(BASE_DIR, "data")
+    LOGS_DIR = os.path.join(BASE_DIR, "logs")
+
+# Ensure directories exist safely
 for d in [MODELS_DIR, DATA_DIR, LOGS_DIR]:
-    os.makedirs(d, exist_ok=True)
+    try:
+        os.makedirs(d, exist_ok=True)
+    except Exception:
+        pass
 
 # ONNX Models & URLs
 YUNET_MODEL_PATH = os.path.join(MODELS_DIR, "face_detection_yunet_2023mar.onnx")
