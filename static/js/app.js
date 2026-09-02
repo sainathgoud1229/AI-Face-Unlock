@@ -49,6 +49,10 @@ function navigateTo(pageId) {
         fetchUsers();
         startWebcamFallback();
     }
+    // Stop webcam stream when leaving scanner
+    if (pageId !== 'scanner') {
+        stopWebcam();
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -56,6 +60,23 @@ function navigateTo(pageId) {
 // ═══════════════════════════════════════════════════════════════
 let webcamStream = null;
 let frameProcessingInterval = null;
+let deniedPopupShown = false;
+
+function stopWebcam() {
+    if (frameProcessingInterval) {
+        clearInterval(frameProcessingInterval);
+        frameProcessingInterval = null;
+    }
+    if (webcamStream) {
+        webcamStream.getTracks().forEach(t => t.stop());
+        webcamStream = null;
+    }
+    deniedPopupShown = false;
+    const videoElem = document.getElementById('webcamVideo');
+    const imgFeed   = document.getElementById('videoFeed');
+    if (videoElem) videoElem.style.display = 'none';
+    if (imgFeed)   imgFeed.style.display   = 'block';
+}
 
 async function startWebcamFallback() {
     const imgFeed = document.getElementById('videoFeed');
@@ -159,13 +180,40 @@ function updateScannerUI(data) {
         nav.textContent = '🔓';
         scanLine.style.background = 'linear-gradient(90deg, transparent 0%, var(--green) 30%, #fff 50%, var(--green) 70%, transparent 100%)';
         scanLine.style.boxShadow = '0 0 18px var(--green), 0 0 6px #fff';
+        deniedPopupShown = false;
 
         if (!systemUnlocked || currentUserId !== data.unlocked_user.user_id) {
             playSuccess();
             systemUnlocked = true;
             currentUserId = data.unlocked_user.user_id;
             setupDashboard(data.unlocked_user);
-            setTimeout(() => navigateTo('dashboard'), 1600);
+            setTimeout(() => {
+                navigateTo('dashboard');
+            }, 1600);
+        }
+
+    } else if (data.access_denied && !systemUnlocked) {
+        // ── FACE SEEN BUT NOT REGISTERED ─────────────────────
+        frame.className = 'face-frame';
+        frameStatus.textContent = 'IDENTITY NOT RECOGNIZED';
+        bannerIcon.textContent = '❌';
+        bannerText.textContent = 'Face not found in database.';
+        badge.classList.remove('unlocked');
+        dot.classList.remove('green');
+        statusText.textContent = 'DENIED';
+        nav.textContent = '🔒';
+        scanLine.style.background = 'linear-gradient(90deg, transparent 0%, #ff4444 30%, #fff 50%, #ff4444 70%, transparent 100%)';
+        scanLine.style.boxShadow = '0 0 18px #ff4444, 0 0 6px #fff';
+
+        if (!deniedPopupShown) {
+            deniedPopupShown = true;
+            playDenied();
+            showNotFoundPopup();
+            // Reset access_denied after 4 seconds so scan can retry
+            setTimeout(async () => {
+                deniedPopupShown = false;
+                await fetch('/api/lock', { method: 'POST' });
+            }, 4000);
         }
 
     } else if (data.liveness_passed || data.metrics?.ear < 0.25) {
@@ -225,6 +273,66 @@ async function lockSystemAndExit() {
     currentUserId = null;
     navigateTo('landing');
 }
+
+// ═══════════════════════════════════════════════════════════════
+// NOT FOUND POPUP
+// ═══════════════════════════════════════════════════════════════
+function showNotFoundPopup() {
+    // Remove any existing popup
+    const existing = document.getElementById('notFoundPopup');
+    if (existing) existing.remove();
+
+    const popup = document.createElement('div');
+    popup.id = 'notFoundPopup';
+    popup.style.cssText = `
+        position: fixed;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%) scale(0.85);
+        background: linear-gradient(135deg, #1a0a0a 0%, #2d0f0f 100%);
+        border: 1.5px solid #ff4444;
+        border-radius: 20px;
+        padding: 2.5rem 2rem;
+        z-index: 9999;
+        text-align: center;
+        min-width: 320px;
+        box-shadow: 0 0 40px rgba(255,68,68,0.4), 0 0 80px rgba(255,68,68,0.15);
+        animation: popupIn 0.35s cubic-bezier(0.34,1.56,0.64,1) forwards;
+        font-family: inherit;
+        color: #fff;
+    `;
+    popup.innerHTML = `
+        <div style="font-size:3rem;margin-bottom:0.75rem;">🚫</div>
+        <h3 style="margin:0 0 0.5rem;font-size:1.3rem;color:#ff6666;letter-spacing:1px;">FACE NOT RECOGNIZED</h3>
+        <p style="margin:0 0 1.2rem;font-size:0.95rem;color:#ccc;line-height:1.5;">
+            Your face was not found in the identity database.<br>
+            <strong style="color:#fff;">Please register first</strong> using the <em>+ Register Face</em> button.
+        </p>
+        <div style="display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap;">
+            <button onclick="document.getElementById('notFoundPopup').remove(); openRegisterModal();"
+                style="background:linear-gradient(135deg,#ff4444,#cc0000);border:none;color:#fff;padding:0.6rem 1.4rem;border-radius:10px;cursor:pointer;font-size:0.9rem;font-weight:600;">
+                + Register Now
+            </button>
+            <button onclick="document.getElementById('notFoundPopup').remove();"
+                style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#ccc;padding:0.6rem 1.4rem;border-radius:10px;cursor:pointer;font-size:0.9rem;">
+                Try Again
+            </button>
+        </div>
+    `;
+
+    // Inject animation keyframe once
+    if (!document.getElementById('popupKeyframes')) {
+        const style = document.createElement('style');
+        style.id = 'popupKeyframes';
+        style.textContent = `@keyframes popupIn { from { transform:translate(-50%,-50%) scale(0.7); opacity:0; } to { transform:translate(-50%,-50%) scale(1); opacity:1; } }`;
+        document.head.appendChild(style);
+    }
+
+    document.body.appendChild(popup);
+
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => { if (popup.parentNode) popup.remove(); }, 5000);
+}
+
 
 // ═══════════════════════════════════════════════════════════════
 // DASHBOARD & PERSONAL SHORTCUTS

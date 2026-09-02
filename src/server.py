@@ -35,6 +35,7 @@ system_state = {
     "registered_users_count": len(user_mgr.list_users()),
     "challenge": liveness_detector.get_current_challenge(),
     "unlock_time": None,
+    "access_denied": False,
 }
 
 audit_logs = []
@@ -207,8 +208,10 @@ def generate_frames():
                     system_state["unlocked_user"] = matched_user
                     system_state["unlock_time"] = time.time()
                     system_state["message"] = f"ACCESS GRANTED - Welcome {matched_user['name']}"
+                    system_state["access_denied"] = False
                     log_event("ACCESS_GRANTED", f"Similarity: {sim:.3f}", matched_user)
                 else:
+                    system_state["access_denied"] = True
                     system_state["message"] = "IDENTITY NOT RECOGNIZED"
                     log_event("ACCESS_DENIED", f"Similarity: {sim:.3f}")
 
@@ -348,8 +351,10 @@ def api_process_frame():
                     system_state["unlocked_user"] = matched_user
                     system_state["unlock_time"] = time.time()
                     system_state["message"] = f"ACCESS GRANTED - Welcome {matched_user['name']}"
+                    system_state["access_denied"] = False
                     log_event("ACCESS_GRANTED", f"Similarity: {sim:.3f}", matched_user)
                 else:
+                    system_state["access_denied"] = True
                     system_state["message"] = "IDENTITY NOT RECOGNIZED"
                     log_event("ACCESS_DENIED", f"Similarity: {sim:.3f}")
 
