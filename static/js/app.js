@@ -44,9 +44,62 @@ function navigateTo(pageId) {
         navStatus.style.display = 'flex';
     }
 
-    // Refresh users list immediately when switching to scanner
+    // Refresh users list & start camera fallback when switching to scanner
     if (pageId === 'scanner') {
         fetchUsers();
+        startWebcamFallback();
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BROWSER WEBCAM STREAMING (RENDER & VERCEL CLOUD COMPATIBILITY)
+// ═══════════════════════════════════════════════════════════════
+let webcamStream = null;
+let frameProcessingInterval = null;
+
+async function startWebcamFallback() {
+    const imgFeed = document.getElementById('videoFeed');
+    const videoElem = document.getElementById('webcamVideo');
+    const canvasElem = document.getElementById('webcamCanvas');
+
+    if (!videoElem) return;
+
+    try {
+        if (!webcamStream) {
+            webcamStream = await navigator.mediaDevices.getUserMedia({
+                video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" }
+            });
+            videoElem.srcObject = webcamStream;
+            videoElem.style.display = 'block';
+            if (imgFeed) imgFeed.style.display = 'none';
+        }
+
+        if (!frameProcessingInterval) {
+            frameProcessingInterval = setInterval(async () => {
+                if (currentPage !== 'scanner' || !videoElem.videoWidth) return;
+                
+                const ctx = canvasElem.getContext('2d');
+                canvasElem.width = videoElem.videoWidth;
+                canvasElem.height = videoElem.videoHeight;
+                ctx.drawImage(videoElem, 0, 0, canvasElem.width, canvasElem.height);
+                
+                const b64Image = canvasElem.toDataURL('image/jpeg', 0.6);
+                
+                try {
+                    const res = await fetch('/api/process_frame', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ image: b64Image })
+                    });
+                    const json = await res.json();
+                    if (json.status === 'success' && json.state) {
+                        updateScannerUI(json.state);
+                    }
+                } catch (_) {}
+            }, 180);
+        }
+    } catch (err) {
+        console.warn('Browser camera unavailable:', err);
     }
 }
 
@@ -77,82 +130,92 @@ async function pollStatus() {
     if (currentPage !== 'scanner') return;
     try {
         const data = await fetchJSON('/api/status');
-
-        const frame        = document.getElementById('faceFrame');
-        const frameStatus  = document.getElementById('frameStatus');
-        const bannerIcon   = document.getElementById('bannerIcon');
-        const bannerText   = document.getElementById('overlayMessage');
-        const badge        = document.getElementById('systemStatusBadge');
-        const dot          = document.getElementById('statusDot');
-        const statusText   = document.getElementById('systemStatusText');
-        const nav          = document.getElementById('navLockIcon');
-        const scanLine     = document.getElementById('scanLine');
-
-        if (data.unlocked && data.unlocked_user) {
-            // ── UNLOCKED ──────────────────────────────────────────
-            frame.className = 'face-frame unlocked';
-            frameStatus.textContent = 'IDENTITY VERIFIED';
-            bannerIcon.textContent = '🔓';
-            bannerText.textContent = data.message;
-            badge.classList.add('unlocked');
-            dot.classList.add('green');
-            statusText.textContent = 'UNLOCKED';
-            nav.textContent = '🔓';
-            scanLine.style.background = 'linear-gradient(90deg, transparent 0%, var(--green) 30%, #fff 50%, var(--green) 70%, transparent 100%)';
-            scanLine.style.boxShadow = '0 0 18px var(--green), 0 0 6px #fff';
-
-            if (!systemUnlocked || currentUserId !== data.unlocked_user.user_id) {
-                playSuccess();
-                systemUnlocked = true;
-                currentUserId = data.unlocked_user.user_id;
-                setupDashboard(data.unlocked_user);
-                setTimeout(() => navigateTo('dashboard'), 1600);
-            }
-
-        } else if (data.liveness_passed || data.metrics?.ear < 0.25) {
-            // ── FACE DETECTED / SCANNING ──────────────────────────
-            frame.className = 'face-frame detected';
-            frameStatus.textContent = data.liveness_passed ? 'LIVENESS VERIFIED' : 'FACE DETECTED';
-            bannerIcon.textContent = '🔍';
-            bannerText.textContent = data.message;
-            badge.classList.remove('unlocked');
-            dot.classList.remove('green');
-            statusText.textContent = 'SCANNING';
-            nav.textContent = '🔒';
-            scanLine.style.background = 'linear-gradient(90deg, transparent 0%, var(--cyan) 30%, #fff 50%, var(--cyan) 70%, transparent 100%)';
-            scanLine.style.boxShadow = '0 0 18px var(--cyan), 0 0 6px #fff';
-
-            if (systemUnlocked) { systemUnlocked = false; currentUserId = null; }
-
-        } else {
-            // ── IDLE / NO FACE ────────────────────────────────────
-            frame.className = 'face-frame';
-            frameStatus.textContent = 'POSITION FACE IN FRAME';
-            bannerIcon.textContent = '🔒';
-            bannerText.textContent = data.message || 'Looking for face…';
-            badge.classList.remove('unlocked');
-            dot.classList.remove('green');
-            statusText.textContent = 'LOCKED';
-            nav.textContent = '🔒';
-            scanLine.style.background = 'linear-gradient(90deg, transparent 0%, var(--cyan) 30%, #fff 50%, var(--cyan) 70%, transparent 100%)';
-            scanLine.style.boxShadow = '0 0 18px var(--cyan), 0 0 6px #fff';
-
-            if (systemUnlocked) { systemUnlocked = false; currentUserId = null; }
-        }
-
-        // ── Telemetry ──────────────────────────────────────────────
-        document.getElementById('matchScore').textContent  = data.similarity.toFixed(3);
-        if (data.metrics) {
-            document.getElementById('earMetric').textContent   = data.metrics.ear.toFixed(3);
-            document.getElementById('smileMetric').textContent = data.metrics.smile.toFixed(3);
-            document.getElementById('poseMetric').textContent  = `${data.metrics.yaw.toFixed(1)}° / ${data.metrics.pitch.toFixed(1)}°`;
-        }
-        document.getElementById('currentChallenge').textContent = data.challenge;
-        document.getElementById('livenessStatus').textContent   = data.liveness_passed ? 'VERIFIED ✓' : 'Awaiting gesture…';
-        document.getElementById('livenessProgress').style.width = data.liveness_passed ? '100%' : '40%';
-        document.getElementById('userCountBadge').textContent   = `${data.registered_users_count} Users`;
-
+        updateScannerUI(data);
     } catch (_) {}
+}
+
+function updateScannerUI(data) {
+    if (!data) return;
+
+    const frame        = document.getElementById('faceFrame');
+    const frameStatus  = document.getElementById('frameStatus');
+    const bannerIcon   = document.getElementById('bannerIcon');
+    const bannerText   = document.getElementById('overlayMessage');
+    const badge        = document.getElementById('systemStatusBadge');
+    const dot          = document.getElementById('statusDot');
+    const statusText   = document.getElementById('systemStatusText');
+    const nav          = document.getElementById('navLockIcon');
+    const scanLine     = document.getElementById('scanLine');
+
+    if (data.unlocked && data.unlocked_user) {
+        // ── UNLOCKED ──────────────────────────────────────────
+        frame.className = 'face-frame unlocked';
+        frameStatus.textContent = 'IDENTITY VERIFIED';
+        bannerIcon.textContent = '🔓';
+        bannerText.textContent = data.message;
+        badge.classList.add('unlocked');
+        dot.classList.add('green');
+        statusText.textContent = 'UNLOCKED';
+        nav.textContent = '🔓';
+        scanLine.style.background = 'linear-gradient(90deg, transparent 0%, var(--green) 30%, #fff 50%, var(--green) 70%, transparent 100%)';
+        scanLine.style.boxShadow = '0 0 18px var(--green), 0 0 6px #fff';
+
+        if (!systemUnlocked || currentUserId !== data.unlocked_user.user_id) {
+            playSuccess();
+            systemUnlocked = true;
+            currentUserId = data.unlocked_user.user_id;
+            setupDashboard(data.unlocked_user);
+            setTimeout(() => navigateTo('dashboard'), 1600);
+        }
+
+    } else if (data.liveness_passed || data.metrics?.ear < 0.25) {
+        // ── FACE DETECTED / SCANNING ──────────────────────────
+        frame.className = 'face-frame detected';
+        frameStatus.textContent = data.liveness_passed ? 'LIVENESS VERIFIED' : 'FACE DETECTED';
+        bannerIcon.textContent = '🔍';
+        bannerText.textContent = data.message;
+        badge.classList.remove('unlocked');
+        dot.classList.remove('green');
+        statusText.textContent = 'SCANNING';
+        nav.textContent = '🔒';
+        scanLine.style.background = 'linear-gradient(90deg, transparent 0%, var(--cyan) 30%, #fff 50%, var(--cyan) 70%, transparent 100%)';
+        scanLine.style.boxShadow = '0 0 18px var(--cyan), 0 0 6px #fff';
+
+        if (systemUnlocked) { systemUnlocked = false; currentUserId = null; }
+
+    } else {
+        // ── IDLE / NO FACE ────────────────────────────────────
+        frame.className = 'face-frame';
+        frameStatus.textContent = 'POSITION FACE IN FRAME';
+        bannerIcon.textContent = '🔒';
+        bannerText.textContent = data.message || 'Looking for face…';
+        badge.classList.remove('unlocked');
+        dot.classList.remove('green');
+        statusText.textContent = 'LOCKED';
+        nav.textContent = '🔒';
+        scanLine.style.background = 'linear-gradient(90deg, transparent 0%, var(--cyan) 30%, #fff 50%, var(--cyan) 70%, transparent 100%)';
+        scanLine.style.boxShadow = '0 0 18px var(--cyan), 0 0 6px #fff';
+
+        if (systemUnlocked) { systemUnlocked = false; currentUserId = null; }
+    }
+
+    // ── Telemetry ──────────────────────────────────────────────
+    if (data.similarity !== undefined) {
+        document.getElementById('matchScore').textContent = data.similarity.toFixed(3);
+    }
+    if (data.metrics) {
+        document.getElementById('earMetric').textContent   = data.metrics.ear.toFixed(3);
+        document.getElementById('smileMetric').textContent = data.metrics.smile.toFixed(3);
+        document.getElementById('poseMetric').textContent  = `${data.metrics.yaw.toFixed(1)}° / ${data.metrics.pitch.toFixed(1)}°`;
+    }
+    if (data.challenge) {
+        document.getElementById('currentChallenge').textContent = data.challenge;
+    }
+    document.getElementById('livenessStatus').textContent   = data.liveness_passed ? 'VERIFIED ✓' : 'Awaiting gesture…';
+    document.getElementById('livenessProgress').style.width = data.liveness_passed ? '100%' : '40%';
+    if (data.registered_users_count !== undefined) {
+        document.getElementById('userCountBadge').textContent = `${data.registered_users_count} Users`;
+    }
 }
 
 

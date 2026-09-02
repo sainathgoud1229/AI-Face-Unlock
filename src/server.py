@@ -59,8 +59,12 @@ class CameraStream:
         self.frame = None
         self.stopped = False
         self.lock = threading.Lock()
-        self.thread = threading.Thread(target=self.update, daemon=True)
-        self.thread.start()
+        if not config.IS_VERCEL:
+            try:
+                self.thread = threading.Thread(target=self.update, daemon=True)
+                self.thread.start()
+            except Exception:
+                pass
 
     def _open_camera(self):
         try:
@@ -275,6 +279,88 @@ def api_delete_user(user_id):
         log_event("USER_DELETED", f"User '{user_id}' removed")
         return jsonify({"status": "success"})
     return jsonify({"status": "error", "message": "User not found"}), 404
+
+import base64
+
+@app.route("/api/process_frame", methods=["POST"])
+def api_process_frame():
+    """Receive frame snapshot from browser WebRTC camera feed and perform biometric recognition."""
+    try:
+        data = request.json
+        if not data or "image" not in data:
+            return jsonify({"status": "error", "message": "No image data"}), 400
+
+        img_b64 = data["image"]
+        if "," in img_b64:
+            img_b64 = img_b64.split(",")[1]
+
+        img_bytes = base64.b64decode(img_b64)
+        nparr = np.frombuffer(img_bytes, np.uint8)
+        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        if frame is None:
+            return jsonify({"status": "error", "message": "Invalid frame"}), 400
+
+        height, width = frame.shape[:2]
+
+        # ── Face Detection ────────────────────────────────────
+        faces = None
+        if detector:
+            try:
+                detector.setInputSize((width, height))
+                _, faces = detector.detect(frame)
+            except Exception:
+                pass
+
+        detected_face = None
+        if faces is not None and len(faces) > 0:
+            detected_face = max(faces, key=lambda f: f[2] * f[3])
+
+        # Store for registration session
+        reg_session["last_frame"] = frame.copy()
+        reg_session["last_face"] = detected_face
+
+        # ── Liveness update ───────────────────────────────────
+        is_live = liveness_detector.update(frame, detected_face)
+        system_state["liveness_passed"] = is_live
+        system_state["challenge"] = liveness_detector.get_current_challenge()
+        system_state["message"] = liveness_detector.get_prompt_message()
+
+        if liveness_detector.last_metrics:
+            m = liveness_detector.last_metrics
+            system_state["metrics"] = {
+                "ear": round(m["ear"], 3),
+                "smile": round(m["smile"], 3),
+                "yaw": round(m["yaw"], 1),
+                "pitch": round(m["pitch"], 1),
+            }
+
+        # ── Face Recognition ──────────────────────────────────
+        if detected_face is not None and recognizer:
+            if is_live and not system_state["unlocked"]:
+                aligned = recognizer.alignCrop(frame, detected_face)
+                feat = recognizer.feature(aligned)
+                matched_user, sim = user_mgr.match_face(feat, recognizer)
+                system_state["similarity"] = round(sim, 3)
+
+                if matched_user:
+                    system_state["unlocked"] = True
+                    system_state["unlocked_user"] = matched_user
+                    system_state["unlock_time"] = time.time()
+                    system_state["message"] = f"ACCESS GRANTED - Welcome {matched_user['name']}"
+                    log_event("ACCESS_GRANTED", f"Similarity: {sim:.3f}", matched_user)
+                else:
+                    system_state["message"] = "IDENTITY NOT RECOGNIZED"
+                    log_event("ACCESS_DENIED", f"Similarity: {sim:.3f}")
+
+        return jsonify({
+            "status": "success",
+            "state": system_state,
+            "face_detected": detected_face is not None
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 
 @app.route("/api/users/<user_id>", methods=["PUT"])
 def api_update_user(user_id):

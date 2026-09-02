@@ -58,8 +58,10 @@
 
                 <!-- Scanner Frame Wrapper -->
                 <div class="scanner-wrapper">
-                    <!-- Live feed -->
-                    <img src="{{ url_for('video_feed') }}" alt="Webcam Feed" id="videoFeed" class="video-feed">
+                    <!-- Live feed (MJPEG Feed or Client-Side Browser WebRTC Camera) -->
+                    <img src="{{ url_for('video_feed') }}" alt="Webcam Feed" id="videoFeed" class="video-feed" onerror="startWebcamFallback()">
+                    <video id="webcamVideo" class="video-feed" style="display:none;" autoplay playsinline muted></video>
+                    <canvas id="webcamCanvas" style="display:none;"></canvas>
 
                     <!-- Scanning line -->
                     <div class="scan-line" id="scanLine"></div>
