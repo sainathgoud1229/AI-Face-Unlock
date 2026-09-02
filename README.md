@@ -104,6 +104,4 @@ graph TD
 
 ---
 
-<div align="center">
-  <p>Built with ❤️ using Flask, OpenCV, WebRTC, and Supabase.</p>
-</div>
+
