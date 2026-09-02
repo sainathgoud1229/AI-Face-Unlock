@@ -538,23 +538,39 @@ function openRegisterModal() {
 }
 function closeRegisterModal() {
     document.getElementById('registerModal').classList.add('hidden');
-    fetchJSON('/api/register/cancel', 'POST').catch(() => {});
 }
 
 async function startRegistration() {
     const name = document.getElementById('regName').value.trim();
-    const role = document.getElementById('regRole').value;
     if (!name) return alert('Enter a name');
     document.getElementById('regStatus').textContent = 'Position your face in camera view and capture.';
     document.getElementById('regStatus').className = 'reg-status info';
-    await fetchJSON('/api/register/start', 'POST', { name, role });
     document.getElementById('btnRegStart').classList.add('hidden');
     document.getElementById('btnRegCapture').classList.remove('hidden');
     document.getElementById('btnRegCancel').classList.remove('hidden');
 }
 
 async function captureRegistration() {
-    const res = await fetchJSON('/api/register/capture', 'POST');
+    const name = document.getElementById('regName').value.trim();
+    const role = document.getElementById('regRole').value;
+    
+    // Capture the frame directly from the video element
+    const videoElem = document.getElementById('webcamVideo');
+    if (!videoElem || videoElem.videoWidth === 0) {
+        document.getElementById('regStatus').textContent = '❌ Camera not ready or not found.';
+        document.getElementById('regStatus').className = 'reg-status error';
+        return;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = videoElem.videoWidth;
+    canvas.height = videoElem.videoHeight;
+    canvas.getContext('2d').drawImage(videoElem, 0, 0);
+    const imageBase64 = canvas.toDataURL('image/jpeg', 0.9);
+
+    document.getElementById('regStatus').textContent = '⏳ Processing biometric registration...';
+    document.getElementById('regStatus').className = 'reg-status info';
+
+    const res = await fetchJSON('/api/register/capture', 'POST', { name, role, image: imageBase64 });
     if (res.status === 'success') {
         document.getElementById('regStatus').textContent = '✅ Registered successfully!';
         document.getElementById('regStatus').className = 'reg-status success';
@@ -566,7 +582,6 @@ async function captureRegistration() {
     }
 }
 async function cancelRegistration() {
-    await fetchJSON('/api/register/cancel', 'POST');
     closeRegisterModal();
 }
 

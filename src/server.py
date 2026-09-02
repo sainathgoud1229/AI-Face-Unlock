@@ -40,14 +40,7 @@ system_state = {
 
 audit_logs = []
 
-reg_session = {
-    "active": False,
-    "name": "",
-    "role": "User",
-    "last_frame": None,
-    "last_face": None,
-    "status": "",
-}
+
 
 
 # ─────────────────────────────────────────────────────────────
@@ -174,10 +167,6 @@ def generate_frames():
         if faces is not None and len(faces) > 0:
             detected_face = max(faces, key=lambda f: f[2] * f[3])
 
-        # Store for registration session
-        reg_session["last_frame"] = frame.copy()
-        reg_session["last_face"] = detected_face
-
         # ── Liveness update ───────────────────────────────────
         is_live = liveness_detector.update(frame, detected_face)
         system_state["liveness_passed"] = is_live
@@ -222,12 +211,6 @@ def generate_frames():
             cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
             cv2.putText(frame, system_state["message"], (x, max(30, y - 10)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2)
-
-        # ── Registration session overlay ──────────────────────
-        if reg_session["active"]:
-            label = f"REG: {reg_session['name']} | FACE: {'DETECTED' if detected_face is not None else 'MISSING'}"
-            cv2.putText(frame, label, (10, height - 15),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 200, 255), 2)
 
         # ── Encode & yield ────────────────────────────────────
         _, buf = cv2.imencode(".jpg", frame)
@@ -319,10 +302,6 @@ def api_process_frame():
         if faces is not None and len(faces) > 0:
             detected_face = max(faces, key=lambda f: f[2] * f[3])
 
-        # Store for registration session
-        reg_session["last_frame"] = frame.copy()
-        reg_session["last_face"] = detected_face
-
         # ── Liveness update ───────────────────────────────────
         is_live = liveness_detector.update(frame, detected_face)
         system_state["liveness_passed"] = is_live
@@ -382,55 +361,68 @@ def api_update_user(user_id):
 # ─────────────────────────────────────────────────────────────
 # ROUTES - Registration via Webcam
 # ─────────────────────────────────────────────────────────────
-@app.route("/api/register/start", methods=["POST"])
-def api_register_start():
-    data = request.json
-    reg_session["active"] = True
-    reg_session["name"] = data.get("name", "New User").strip()
-    reg_session["role"] = data.get("role", "User").strip()
-    reg_session["status"] = "ready"
-    return jsonify({"status": "started"})
-
 @app.route("/api/register/capture", methods=["POST"])
 def api_register_capture():
-    if not reg_session["active"]:
-        return jsonify({"status": "error", "message": "No registration session active"}), 400
+    data = request.json
+    if not data:
+        return jsonify({"status": "error", "message": "No data provided"}), 400
 
-    frame = reg_session["last_frame"]
-    face = reg_session["last_face"]
+    name = data.get("name", "").strip()
+    role = data.get("role", "User").strip()
+    img_b64 = data.get("image")
 
-    if frame is None:
-        return jsonify({"status": "error", "message": "No camera frame available"}), 400
-    if face is None:
-        return jsonify({"status": "error", "message": "No face detected. Please face the camera."}), 400
+    if not name:
+        return jsonify({"status": "error", "message": "Name is required"}), 400
+    if not img_b64:
+        return jsonify({"status": "error", "message": "No image data provided"}), 400
+
+    if "," in img_b64:
+        img_b64 = img_b64.split(",")[1]
 
     try:
+        # Decode base64 to OpenCV frame
+        img_bytes = base64.b64decode(img_b64)
+        nparr = np.frombuffer(img_bytes, np.uint8)
+        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        if frame is None:
+            return jsonify({"status": "error", "message": "Invalid frame data"}), 400
+
+        height, width = frame.shape[:2]
+        
+        # Detect Face
+        faces = None
+        if detector:
+            detector.setInputSize((width, height))
+            _, faces = detector.detect(frame)
+
+        if faces is None or len(faces) == 0:
+            return jsonify({"status": "error", "message": "No face detected in the captured image. Please try again."}), 400
+        
+        # Take the largest face if multiple
+        face = faces[0]
+
         aligned = recognizer.alignCrop(frame, face)
         feat = recognizer.feature(aligned)
         
         # Save the actual face image
-        filename = f"{int(time.time())}_{reg_session['name'].lower().replace(' ', '_')}.jpg"
+        filename = f"{int(time.time())}_{name.lower().replace(' ', '_')}.jpg"
         filepath = os.path.join(FACES_DIR, filename)
         cv2.imwrite(filepath, aligned)
 
         user_id = user_mgr.register_user(
-            reg_session["name"], 
+            name, 
             feat, 
-            role=reg_session["role"],
+            role=role,
             face_image=filename
         )
-        reg_session["active"] = False
-        reg_session["status"] = "done"
-        log_event("USER_REGISTERED", f"New user registered: {reg_session['name']}")
-        return jsonify({"status": "success", "user_id": user_id, "name": reg_session["name"]})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        
+        log_event("USER_REGISTERED", f"User '{name}' registered as {role}", {"name": name})
+        return jsonify({"status": "success", "user_id": user_id, "name": name})
 
-@app.route("/api/register/cancel", methods=["POST"])
-def api_register_cancel():
-    reg_session["active"] = False
-    reg_session["status"] = "cancelled"
-    return jsonify({"status": "cancelled"})
+    except Exception as e:
+        print(f"[Register] Error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 # ─────────────────────────────────────────────────────────────
