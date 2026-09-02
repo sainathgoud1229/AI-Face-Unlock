@@ -500,6 +500,9 @@ def api_get_user_files(user_id):
 
 @app.route("/api/files/<user_id>/upload", methods=["POST"])
 def api_upload_user_file(user_id):
+    if config.IS_VERCEL:
+        return jsonify({"status": "error", "message": "File uploads require persistent storage. Please use the Render link to upload files."}), 400
+
     user = user_mgr.get_user(user_id)
     if not user:
         return jsonify({"status": "error", "message": "User not found"}), 404

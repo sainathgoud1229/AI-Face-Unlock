@@ -1,141 +1,109 @@
-# AI Face Unlock 🔓
+<div align="center">
+  <img src="https://img.icons8.com/color/96/000000/face-id.png" alt="Face Vault Logo">
+  <h1>AI Face-Vault</h1>
+  <p><strong>A Next-Gen Biometric Authentication System & Personal Vault</strong></p>
 
-![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![Flask](https://img.shields.io/badge/Flask-3.0-000000?style=for-the-badge&logo=flask&logoColor=white)
-![OpenCV](https://img.shields.io/badge/OpenCV-YuNet%20%2B%20SFace-5C3EE8?style=for-the-badge&logo=opencv&logoColor=white)
-![Supabase](https://img.shields.io/badge/Supabase-Cloud--DB-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)
-![Excel](https://img.shields.io/badge/Excel-Auto--Sync-217346?style=for-the-badge&logo=microsoftexcel&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-brightgreen?style=for-the-badge)
+  <p>
+    <a href="https://ai-face-unlock.onrender.com"><strong>Render Live Demo</strong></a> · 
+    <a href="https://ai-face-unlock.vercel.app"><strong>Vercel Edge Demo</strong></a>
+  </p>
 
-An enterprise-grade, **3-Page Biometric Single Page Application (SPA)** that locks personal digital workspaces behind real-time AI face recognition and anti-spoofing liveness verification. Features private personal document storage (1GB Vault), automatic local Excel spreadsheet synchronization, and Supabase cloud database integration.
+</div>
+
+---
+
+## 🌟 Overview
+**AI Face-Vault** is a futuristic, highly secure web application that uses real-time facial recognition to authenticate users. Once authenticated, users gain access to a personal, encrypted vault where they can store important documents (PDFs), manage fast-access links, and view their login history.
+
+Designed with privacy and speed in mind, it utilizes edge computing (Vercel) for rapid frontend delivery and persistent cloud backends (Render + Supabase) for secure data storage.
+
+---
+
+## ✨ Features
+- 🛡️ **Biometric Security:** Real-time facial detection and recognition using OpenCV's advanced YuNet and SFace models.
+- 📸 **WebRTC Camera Pipeline:** Browser-native high-performance camera streaming that bypasses cloud container hardware restrictions.
+- ⚡ **Stateless Edge Authentication:** Vercel serverless deployment instantly identifies users against a synced Supabase cloud database.
+- 🗄️ **Personal Digital Vault:** Store PDFs and documents securely. *(Note: File storage requires persistent disk hosting like Render or local execution).*
+- 🔗 **Shortcut Manager:** Add, edit, and delete quick links to your GitHub, LinkedIn, or favorite sites.
+- 📊 **Dynamic Telemetry:** Real-time tracking of facial yaw/pitch, smile probability, and biometric confidence scores.
 
 ---
 
 ## 🏗️ System Architecture
 
+This project employs a **Hybrid Cloud Architecture** to maximize performance while ensuring data persistence.
+
 ```mermaid
 graph TD
-    A[Client Web Browser / SPA Frontend] -->|MJPEG Live Camera Stream| B[Flask Server & Video Feed]
-    B --> C[OpenCV YuNet Engine]
-    C -->|Detect Face Coordinates| D[Liveness Verification Module]
-    D -->|Check Blink & Head Presence| E[OpenCV SFace Recognizer]
-    E -->|Extract 128D Embedding| F[Biometric Matcher]
+    Client[Browser Client]
+    Vercel[Vercel Serverless Edge]
+    Render[Render Persistent Server]
+    Supabase[(Supabase PostgreSQL)]
+    Local[Local / Excel Auto-Sync]
+
+    Client -- WebRTC Frames --> Vercel
+    Client -- File Uploads --> Render
     
-    F -->|Match Found| G[Unlock Page 3: Private Dashboard]
-    F -->|No Match| H[Lock Scanner & Prompt Registration]
+    Vercel -- Auth & Shortcuts --> Supabase
+    Render -- DB Sync --> Supabase
+    Render -- CSV/Excel --> Local
     
-    G --> I[1GB PDF & File Vault]
-    G --> J[Personal Web & Social Shortcuts]
-    
-    I & J -->|Auto-Sync Record| K[Local Excel Database: users_database.xlsx]
-    I & J -->|Cloud Sync| L[Supabase Cloud Database]
+    style Client fill:#2d3748,stroke:#4facfe,color:#fff
+    style Vercel fill:#1a202c,stroke:#e53e3e,color:#fff
+    style Render fill:#1a202c,stroke:#38a169,color:#fff
+    style Supabase fill:#1a202c,stroke:#3182ce,color:#fff
 ```
+
+### Components
+1. **Frontend / Edge (Vercel):** Extremely fast response times for the WebRTC feed. Since it is stateless, it pulls user identity directly from Supabase.
+2. **Persistent Backend (Render):** Handles heavy lifting such as PDF file storage (which requires a hard drive) and syncing local JSON/Excel databases.
+3. **Database (Supabase):** The central source of truth for user embeddings and shortcut data, ensuring both Vercel and Render always see the same users.
 
 ---
 
-## ⚡ How It Works (3-Page Workflow)
+## 🚀 Quick Setup (Local Development)
 
-```text
- ┌───────────────────────────┐      ┌───────────────────────────┐      ┌───────────────────────────┐
- │   PAGE 1: WELCOME LANDING  │ ───► │ PAGE 2: BIOMETRIC SCANNER │ ───► │ PAGE 3: PRIVATE DASHBOARD │
- └───────────────────────────┘      └───────────────────────────┘      └───────────────────────────┘
-   High-tech entry banner &           Live webcam scanner feed &         Personal workspace loaded
-   biometric workspace launcher.      interactive liveness checks.       EXCLUSIVELY for verified identity.
-```
+### Prerequisites
+- Python 3.9+
+- A working webcam
 
-### 1. 🌐 Page 1: Welcome & Gateway
-- Introduces the AI Face Unlock system with glassmorphic cards and dynamic security stats.
-- Clicking **"Launch Biometric Scanner"** smoothly transitions to Page 2.
+### Installation
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/yourusername/AI-Face-Unlock.git
+   cd AI-Face-Unlock
+   ```
 
-### 2. 👁️ Page 2: Biometric & Liveness Verification
-- Activates the camera feed powered by **OpenCV YuNet**.
-- Executes interactive liveness challenges (eye blink verification + steady head presence detection) to prevent photo spoofing.
-- Compares extracted 128D facial embeddings against stored biometric feature vectors using **SFace** cosine similarity (`threshold = 0.363`).
-- **Privacy Gating**: Public identity lists are hidden from Page 2 to ensure total data privacy.
+2. **Install Dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-### 3. 🔐 Page 3: Face-Locked Personal Workspace & 1GB Storage
-- Once authenticated, Page 3 unlocks **exclusively for the face-verified identity**:
-  - **Personal Social & Web Links**: Dedicated shortcuts for GitHub, LinkedIn, Instagram, and web apps.
-  - **1GB Secure PDF & Document Vault**: Dedicated file storage meter (`0.0 MB / 1024 MB`) with upload, download, and delete actions.
-  - **Zero Exposure**: Other registered identities, photos, or documents remain completely invisible and protected.
+3. **Configure Environment:**
+   Create a `.env` file based on `.env.example`:
+   ```bash
+   cp .env.example .env
+   ```
+   Add your Supabase URL and Anon Key to the `.env` file if you want cloud synchronization.
 
----
+4. **Run the Server:**
+   ```bash
+   python src/server.py
+   ```
+   *The AI models will automatically download on the first run.*
 
-## 📊 Automatic Excel Database Synchronization (`users_database.xlsx`)
-
-Whenever a user registers their face identity, adds a personal link, or uploads a PDF document to their vault, the backend automatically writes to a local Microsoft Excel spreadsheet at `data/users_database.xlsx`.
-
-### 📑 Excel Sheet Layout & Schema:
-
-```text
-┌────────┬─────────┬─────────────────────────┬─────────────────────┬─────────────────────────────────┬──────────┬───────────┬───────────────────┬───────────┐
-│ Faceid │  name   │       Face Image        │    Enrolled Date    │             github              │ Linkedin │ Instagram │        pds        │ remaining │
-├────────┼─────────┼─────────────────────────┼─────────────────────┼─────────────────────────────────┼──────────┼───────────┼───────────────────┼───────────┤
-│   1    │ Sainath │ 1788285273_sainath.jpg  │ 2026-09-01 23:24:33 │ https://github.com/sainathgoud │   None   │   None    │ my_resume_ES.pdf  │   None    │
-│   2    │ Ram     │ 1788285991_ram.jpg      │ 2026-09-01 23:40:12 │ https://github.com/ramdev       │   None   │   None    │ project_docs.pdf  │   None    │
-└────────┴─────────┴─────────────────────────┴─────────────────────┴─────────────────────────────────┴──────────┴───────────┴───────────────────┴───────────┘
-```
-
-- **`Faceid`**: Sequential numeric identifier (`1`, `2`, `3`...).
-- **`name`**: Full name of the registered user.
-- **`Face Image`**: Cropped face photo filename saved in `data/faces/`.
-- **`Enrolled Date`**: Timestamp of identity enrollment.
-- **`github`**: Automatically parsed GitHub profile URL.
-- **`Linkedin`**: Automatically parsed LinkedIn profile URL.
-- **`Instagram`**: Automatically parsed Instagram handle/URL.
-- **`pds`**: List of uploaded PDF filenames stored in the 1GB Document Vault.
-- **`remaining`**: Any custom user links or notes.
+5. **Open in Browser:** Navigate to `http://127.0.0.1:5000`
 
 ---
 
-## 📂 Project Directory Structure
+## 🔮 Future Integrations
+- **Supabase Storage:** Migrate document uploads from local disk to Supabase S3 buckets to allow file uploads directly from the stateless Vercel edge.
+- **JWT Session Tokens:** Implement cryptographic session tokens upon successful facial verification to persist authentication across browser tabs.
+- **Liveness Detection Checks:** Force users to perform randomized challenges (e.g., "Blink Twice", "Turn Head Left") to prevent spoofing with photos.
+- **Supabase Realtime:** Stream live login events to a global admin dashboard.
 
-```text
-AI-Face-Unlock/
-├── data/                    # Private local database storage (ignored in git)
-│   ├── users_db.json        # JSON user records & feature embeddings
-│   ├── users_database.xlsx  # Native formatted Excel spreadsheet
-│   ├── users_database.csv   # CSV database export
-│   ├── faces/               # Enrolled cropped face photos
-│   └── user_files/          # Uploaded vault PDFs & documents
-├── models/                  # ONNX AI Models (YuNet detection & SFace recognition)
-├── src/                     # Backend Python Modules
-│   ├── config.py            # Central thresholds & model paths
-│   ├── liveness_detection.py# Anti-spoofing liveness verification engine
-│   ├── model_loader.py      # ONNX model loader & YuNet sensitivity tuner
-│   ├── server.py           # Flask web server & MJPEG streaming routes
-│   ├── supabase_client.py   # Supabase cloud database synchronization
-│   └── user_manager.py      # User CRUD & Excel spreadsheet builder
-├── static/                  # Glassmorphic Frontend Assets
-│   ├── css/style.css        # Premium dark glassmorphism stylesheet
-│   └── js/app.js            # Single Page Application router & polling
-├── templates/               # HTML Templates
-│   └── index.html           # SPA template (3-Page views & modals)
-├── .gitignore               # Strict security & privacy git exclusions
-├── requirements.txt         # Dependency manifest
-├── render.yaml              # Render web service configuration
-├── vercel.json              # Vercel serverless deployment config
-└── wsgi.py                  # Web server WSGI entrypoint
-```
+---
 
-
-
-## 🔒 Enterprise Data Privacy & Security Architecture
-
-The system is engineered with strict privacy-by-design principles to protect biometric identity data and personal user vaults:
-
-1. **Zero Client Data Exposure**:
-   - Public database listings and download controls are removed from client-side views to prevent unauthorized user data exfiltration across client browsers.
-
-2. **Isolated Server Storage (`./data/`)**:
-   - All enrolled biometric templates, face snapshot crops, personal document uploads, and Excel spreadsheets (`users_database.xlsx`) are stored locally within the application data directory (`./data/`).
-
-3. **Strict Version Control Exclusions (`.gitignore`)**:
-   - Comprehensive `.gitignore` rules strictly prevent local databases, raw face crop images, Excel/CSV spreadsheets, and uploaded PDFs from ever being committed to public Git repositories.
-
-4. **Biometric Access Gating**:
-   - Personal links, social shortcuts, and the 1GB Document Vault are loaded exclusively upon successful multi-gesture facial recognition matching (`SFace` threshold `0.363`).
-
-5. **Cloud Secret Management**:
-   - Optional cloud database synchronization with Supabase (`src/supabase_client.py`) uses encrypted REST endpoints with credentials managed via environment variables (`SUPABASE_URL`, `SUPABASE_KEY`).
-
+<div align="center">
+  <p>Built with ❤️ using Flask, OpenCV, WebRTC, and Supabase.</p>
+</div>

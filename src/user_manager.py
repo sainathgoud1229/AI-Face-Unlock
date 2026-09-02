@@ -293,6 +293,11 @@ class UserManager:
         ]
 
     def get_user(self, user_id):
+        if user_id not in self.users and supabase.enabled:
+            cloud_user = supabase.fetch_user(user_id)
+            if cloud_user:
+                cloud_user["feature"] = cloud_user.pop("feature_vector", [])
+                self.users[user_id] = cloud_user
         return self.users.get(user_id)
 
     def match_face(self, query_feature, recognizer, threshold=config.COSINE_SIMILARITY_THRESHOLD):
@@ -319,13 +324,14 @@ class UserManager:
     # PER-USER SHORTCUTS CRUD
     # ─────────────────────────────────────────────────────────
     def get_shortcuts(self, user_id):
-        user = self.users.get(user_id)
+        user = self.get_user(user_id)
         if not user:
             return []
         return user.get("shortcuts", [])
 
     def add_shortcut(self, user_id, name, url, icon="🔗", color="#4facfe", stype="link"):
-        if user_id not in self.users:
+        user = self.get_user(user_id)
+        if not user:
             return None
         if not url.startswith("http"):
             url = "https://" + url
@@ -339,22 +345,23 @@ class UserManager:
             "type": stype,
             "added_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
-        self.users[user_id].setdefault("shortcuts", []).append(shortcut)
+        user.setdefault("shortcuts", []).append(shortcut)
         self.save_database()
         supabase.sync_shortcut(user_id, shortcut)
         return shortcut
 
     def update_shortcut(self, user_id, shortcut_id, name=None, url=None, icon=None, color=None):
-        user = self.users.get(user_id)
+        user = self.get_user(user_id)
         if not user:
             return False
-        for sc in user.get("shortcuts", []):
-            if sc["id"] == shortcut_id:
-                if name:  sc["name"]  = name
-                if url:   sc["url"]   = url if url.startswith("http") else "https://" + url
-                if icon:  sc["icon"]  = icon
-                if color: sc["color"] = color
+        for s in user.get("shortcuts", []):
+            if s["id"] == shortcut_id:
+                if name: s["name"] = name
+                if url: s["url"] = url
+                if icon: s["icon"] = icon
+                if color: s["color"] = color
                 self.save_database()
+                supabase.sync_shortcut(user_id, s)
                 return True
         return False
 

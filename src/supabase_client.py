@@ -45,6 +45,22 @@ class SupabaseClient:
             print(f"[Supabase] User sync error: {e}")
             return False
 
+    def fetch_user(self, user_id):
+        """Fetch user data from Supabase 'users' table."""
+        if not self.enabled:
+            return None
+        try:
+            endpoint = f"{self.url}/rest/v1/users?user_id=eq.{user_id}&select=*"
+            res = requests.get(endpoint, headers=self._headers(), timeout=5)
+            if res.status_code == 200:
+                data = res.json()
+                if len(data) > 0:
+                    return data[0]
+            return None
+        except Exception as e:
+            print(f"[Supabase] Fetch user error: {e}")
+            return None
+
     def sync_shortcut(self, user_id, shortcut_data):
         """Sync a personal shortcut/link to Supabase 'shortcuts' table."""
         if not self.enabled:
