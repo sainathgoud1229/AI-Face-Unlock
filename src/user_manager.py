@@ -314,12 +314,23 @@ class UserManager:
         ]
 
     def get_user(self, user_id):
-        if user_id not in self.users and supabase.enabled:
-            cloud_user = supabase.fetch_user(user_id)
+        if not user_id:
+            return None
+        uid = str(user_id).lower().strip()
+        if uid in self.users:
+            return self.users[uid]
+        for k, v in self.users.items():
+            if k.lower().strip() == uid:
+                return v
+
+        if supabase.enabled:
+            cloud_user = supabase.fetch_user(uid)
             if cloud_user:
                 cloud_user["feature"] = cloud_user.pop("feature_vector", [])
-                self.users[user_id] = cloud_user
-        return self.users.get(user_id)
+                c_uid = str(cloud_user.get("user_id", uid)).lower().strip()
+                self.users[c_uid] = cloud_user
+                return cloud_user
+        return None
 
     def match_face(self, query_feature, recognizer, threshold=config.COSINE_SIMILARITY_THRESHOLD):
         if not self.users:
@@ -345,26 +356,25 @@ class UserManager:
     # PER-USER SHORTCUTS CRUD
     # ─────────────────────────────────────────────────────────
     def get_shortcuts(self, user_id):
-        # On Vercel, shortcuts are the source of truth in Supabase
+        uid = str(user_id).lower().strip()
         if config.IS_VERCEL and supabase.enabled:
-            cloud_shortcuts = supabase.fetch_shortcuts(user_id)
+            cloud_shortcuts = supabase.fetch_shortcuts(uid)
             if cloud_shortcuts is not None:
                 return cloud_shortcuts
-        user = self.get_user(user_id)
+        user = self.get_user(uid)
         if not user:
             return []
         return user.get("shortcuts", [])
 
-
     def add_shortcut(self, user_id, name, url, icon="🔗", color="#4facfe", stype="link"):
-        user = self.get_user(user_id)
-        if not user:
-            return None
+        uid = str(user_id).lower().strip()
+        user = self.get_user(uid)
         if not url.startswith("http"):
             url = "https://" + url
         sid = f"{int(time.time())}_{name.lower().replace(' ', '_')}"
         shortcut = {
             "id": sid,
+            "user_id": uid,
             "name": name,
             "url": url,
             "icon": icon,
@@ -372,49 +382,52 @@ class UserManager:
             "type": stype,
             "added_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
-        user.setdefault("shortcuts", []).append(shortcut)
-        # On Vercel we skip disk writes; sync directly to Supabase
+        if user:
+            user.setdefault("shortcuts", []).append(shortcut)
+
         if config.IS_VERCEL:
-            supabase.sync_shortcut(user_id, shortcut)
+            supabase.sync_shortcut(uid, shortcut)
         else:
             self.save_database()
-            supabase.sync_shortcut(user_id, shortcut)
+            supabase.sync_shortcut(uid, shortcut)
         return shortcut
 
-
     def update_shortcut(self, user_id, shortcut_id, name=None, url=None, icon=None, color=None):
-        user = self.get_user(user_id)
-        if not user:
-            return False
-        for s in user.get("shortcuts", []):
-            if s["id"] == shortcut_id:
-                if name: s["name"] = name
-                if url: s["url"] = url
-                if icon: s["icon"] = icon
-                if color: s["color"] = color
-                if not config.IS_VERCEL:
-                    self.save_database()
-                supabase.sync_shortcut(user_id, s)
-                return True
-
-        return False
+        uid = str(user_id).lower().strip()
+        user = self.get_user(uid)
+        if user:
+            for s in user.get("shortcuts", []):
+                if s["id"] == shortcut_id:
+                    if name: s["name"] = name
+                    if url: s["url"] = url
+                    if icon: s["icon"] = icon
+                    if color: s["color"] = color
+                    if not config.IS_VERCEL:
+                        self.save_database()
+                    supabase.sync_shortcut(uid, s)
+                    return True
+        # Direct sync if user object not in memory
+        shortcut_data = {
+            "id": shortcut_id,
+            "user_id": uid,
+            "name": name,
+            "url": url,
+            "icon": icon,
+            "color": color,
+        }
+        return supabase.sync_shortcut(uid, shortcut_data)
 
     def delete_shortcut(self, user_id, shortcut_id):
-        user = self.get_user(user_id)
-        if not user:
-            return False
-        original = user.get("shortcuts", [])
-        updated = [s for s in original if s["id"] != shortcut_id]
-        if len(updated) < len(original):
+        uid = str(user_id).lower().strip()
+        user = self.get_user(uid)
+        if user:
+            original = user.get("shortcuts", [])
+            updated = [s for s in original if s["id"] != shortcut_id]
             user["shortcuts"] = updated
             if not config.IS_VERCEL:
                 self.save_database()
-            # Also delete from Supabase
-            supabase.delete_shortcut(shortcut_id)
-            return True
-        # If not in local memory (Vercel), delete directly from Supabase
-        if config.IS_VERCEL:
-            return supabase.delete_shortcut(shortcut_id)
-        return False
+        supabase.delete_shortcut(shortcut_id)
+        return True
+
 
 
