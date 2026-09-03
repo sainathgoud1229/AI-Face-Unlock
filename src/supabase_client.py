@@ -108,5 +108,19 @@ class SupabaseClient:
             print(f"[Supabase] Delete shortcut error: {e}")
             return False
 
+    def fetch_all_users(self):
+        """Fetch ALL users from Supabase 'users' table (for Vercel cold start)."""
+        if not self.enabled:
+            return []
+        try:
+            endpoint = f"{self.url}/rest/v1/users?select=*"
+            res = requests.get(endpoint, headers=self._headers(), timeout=10)
+            if res.status_code == 200:
+                return res.json()
+            return []
+        except Exception as e:
+            print(f"[Supabase] Fetch all users error: {e}")
+            return []
+
 
 supabase = SupabaseClient()

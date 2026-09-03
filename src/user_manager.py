@@ -28,6 +28,19 @@ class UserManager:
         else:
             self.users = {}
 
+        # On Vercel cold start: pull ALL users from Supabase into memory
+        # so face matching works immediately without re-registration
+        if not self.users and supabase.enabled:
+            print("[UserManager] Cold start detected. Loading users from Supabase...")
+            cloud_users = supabase.fetch_all_users()
+            for cu in cloud_users:
+                uid = cu.get("user_id")
+                if uid:
+                    cu["feature"] = cu.pop("feature_vector", [])
+                    self.users[uid] = cu
+            if self.users:
+                print(f"[UserManager] Loaded {len(self.users)} user(s) from Supabase cloud.")
+
         # Migrate legacy face_features.npy
         if not self.users and os.path.exists(config.LEGACY_FEATURE_FILE):
             try:

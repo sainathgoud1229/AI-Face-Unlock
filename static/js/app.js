@@ -24,6 +24,16 @@ let currentPage = 'landing';
 let systemUnlocked = false;
 let currentUserId = null;
 
+function getCurrentUserId() {
+    if (currentUserId) return currentUserId;
+    const stored = sessionStorage.getItem('active_user_id');
+    if (stored) {
+        currentUserId = stored;
+        return currentUserId;
+    }
+    return null;
+}
+
 function navigateTo(pageId) {
     document.querySelectorAll('.page-view').forEach(p => {
         p.classList.remove('active');
@@ -234,7 +244,7 @@ function updateScannerUI(data) {
         scanLine.style.background = 'linear-gradient(90deg, transparent 0%, var(--cyan) 30%, #fff 50%, var(--cyan) 70%, transparent 100%)';
         scanLine.style.boxShadow = '0 0 18px var(--cyan), 0 0 6px #fff';
 
-        if (systemUnlocked) { systemUnlocked = false; currentUserId = null; }
+        if (systemUnlocked) { systemUnlocked = false; }
 
     } else {
         // ── IDLE / NO FACE ────────────────────────────────────
@@ -249,7 +259,7 @@ function updateScannerUI(data) {
         scanLine.style.background = 'linear-gradient(90deg, transparent 0%, var(--cyan) 30%, #fff 50%, var(--cyan) 70%, transparent 100%)';
         scanLine.style.boxShadow = '0 0 18px var(--cyan), 0 0 6px #fff';
 
-        if (systemUnlocked) { systemUnlocked = false; currentUserId = null; }
+        if (systemUnlocked) { systemUnlocked = false; }
     }
 
     // ── Telemetry ──────────────────────────────────────────────
@@ -276,6 +286,8 @@ async function lockSystemAndExit() {
     await fetchJSON('/api/lock', 'POST');
     systemUnlocked = false;
     currentUserId = null;
+    sessionStorage.removeItem('active_user_id');
+    sessionStorage.removeItem('active_user_data');
     navigateTo('landing');
 }
 
@@ -343,6 +355,11 @@ function showNotFoundPopup() {
 // DASHBOARD & PERSONAL SHORTCUTS
 // ═══════════════════════════════════════════════════════════════
 function setupDashboard(user) {
+    if (user && user.user_id) {
+        currentUserId = user.user_id;
+        sessionStorage.setItem('active_user_id', user.user_id);
+        sessionStorage.setItem('active_user_data', JSON.stringify(user));
+    }
     document.getElementById('dashWelcomeText').textContent = `Welcome back, ${user.name}`;
     document.getElementById('dashRoleText').textContent = user.role;
     
@@ -391,21 +408,22 @@ async function loadUserVaultFiles(userId) {
 }
 
 async function handleVaultUpload(input) {
-    if (!currentUserId || !input.files || input.files.length === 0) return;
+    const uid = getCurrentUserId();
+    if (!uid || !input.files || input.files.length === 0) return;
     const file = input.files[0];
     const formData = new FormData();
     formData.append('file', file);
 
     showToast('Uploading file to vault...');
     try {
-        const response = await fetch(`/api/files/${currentUserId}/upload`, {
+        const response = await fetch(`/api/files/${uid}/upload`, {
             method: 'POST',
             body: formData
         });
         const res = await response.json();
         if (res.status === 'success') {
             showToast('Document stored in vault!');
-            loadUserVaultFiles(currentUserId);
+            loadUserVaultFiles(uid);
         } else {
             showToast(res.message || 'Upload failed', 'error');
         }
@@ -416,10 +434,11 @@ async function handleVaultUpload(input) {
 }
 
 async function deleteVaultFile(fileId) {
-    if (!currentUserId) return;
+    const uid = getCurrentUserId();
+    if (!uid) return;
     if (!confirm('Delete this file from your vault?')) return;
-    await fetchJSON(`/api/files/${currentUserId}/${fileId}`, 'DELETE');
-    loadUserVaultFiles(currentUserId);
+    await fetchJSON(`/api/files/${uid}/${fileId}`, 'DELETE');
+    loadUserVaultFiles(uid);
 }
 
 async function loadPersonalShortcuts(userId) {
@@ -463,7 +482,8 @@ function openAddShortcutModal() {
 function closeAddShortcutModal() { document.getElementById('addShortcutModal').classList.add('hidden'); }
 
 async function saveShortcut() {
-    if (!currentUserId) {
+    const uid = getCurrentUserId();
+    if (!uid) {
         showToast('Session expired. Please scan your face again.', 'error');
         return;
     }
@@ -480,11 +500,11 @@ async function saveShortcut() {
 
     showToast('Saving...');
     try {
-        const res = await fetchJSON(`/api/shortcuts/${currentUserId}`, 'POST', { name, url, type: stype, icon, color });
+        const res = await fetchJSON(`/api/shortcuts/${uid}`, 'POST', { name, url, type: stype, icon, color });
         if (res.status === 'success') {
             showToast('Added to your dashboard! ✅');
             closeAddShortcutModal();
-            loadPersonalShortcuts(currentUserId);
+            loadPersonalShortcuts(uid);
         } else {
             showToast(res.message || 'Save failed', 'error');
         }
@@ -495,10 +515,11 @@ async function saveShortcut() {
 }
 
 async function deleteShortcut(shortcutId) {
-    if (!currentUserId) return;
+    const uid = getCurrentUserId();
+    if (!uid) return;
     if (!confirm('Remove this item?')) return;
-    await fetchJSON(`/api/shortcuts/${currentUserId}/${shortcutId}`, 'DELETE');
-    loadPersonalShortcuts(currentUserId);
+    await fetchJSON(`/api/shortcuts/${uid}/${shortcutId}`, 'DELETE');
+    loadPersonalShortcuts(uid);
 }
 
 
@@ -630,7 +651,17 @@ document.querySelectorAll('.modal-backdrop').forEach(bd => {
 // Timers
 setInterval(pollStatus, 400);
 setInterval(fetchUsers, 4000);
-fetchUsers();
+// Auto-recover active session from sessionStorage if available
+const savedUserId = sessionStorage.getItem('active_user_id');
+const savedUserData = sessionStorage.getItem('active_user_data');
+if (savedUserId && savedUserData) {
+    try {
+        const user = JSON.parse(savedUserData);
+        currentUserId = savedUserId;
+        systemUnlocked = true;
+        setupDashboard(user);
+    } catch (_) {}
+} else {
+    navigateTo('landing');
+}
 
-// Initialize landing
-navigateTo('landing');
