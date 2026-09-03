@@ -138,10 +138,15 @@ function showToast(msg, type = '') {
 }
 
 async function fetchJSON(url, method = 'GET', body = null) {
-    const opts = { method, headers: { 'Content-Type': 'application/json' } };
-    if (body) opts.body = JSON.stringify(body);
-    const r = await fetch(url, opts);
-    return r.json();
+    try {
+        const opts = { method, headers: { 'Content-Type': 'application/json' } };
+        if (body) opts.body = JSON.stringify(body);
+        const r = await fetch(url, opts);
+        return await r.json();
+    } catch (e) {
+        console.error('[fetchJSON] Error:', url, e);
+        return { status: 'error', message: 'Network error. Please try again.' };
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -458,7 +463,10 @@ function openAddShortcutModal() {
 function closeAddShortcutModal() { document.getElementById('addShortcutModal').classList.add('hidden'); }
 
 async function saveShortcut() {
-    if (!currentUserId) return;
+    if (!currentUserId) {
+        showToast('Session expired. Please scan your face again.', 'error');
+        return;
+    }
     const name = document.getElementById('scName').value.trim();
     const url = document.getElementById('scUrl').value.trim();
     const stype = document.getElementById('scType').value;
@@ -470,13 +478,19 @@ async function saveShortcut() {
 
     if (!name || !url) { showToast('Name and URL required'); return; }
 
-    const res = await fetchJSON(`/api/shortcuts/${currentUserId}`, 'POST', { name, url, type: stype, icon, color });
-    if (res.status === 'success') {
-        showToast('Added to your dashboard');
-        closeAddShortcutModal();
-        loadPersonalShortcuts(currentUserId);
-    } else {
-        showToast(res.message, 'error');
+    showToast('Saving...');
+    try {
+        const res = await fetchJSON(`/api/shortcuts/${currentUserId}`, 'POST', { name, url, type: stype, icon, color });
+        if (res.status === 'success') {
+            showToast('Added to your dashboard! ✅');
+            closeAddShortcutModal();
+            loadPersonalShortcuts(currentUserId);
+        } else {
+            showToast(res.message || 'Save failed', 'error');
+        }
+    } catch (e) {
+        console.error('Save shortcut error:', e);
+        showToast('Failed to save. Please try again.', 'error');
     }
 }
 

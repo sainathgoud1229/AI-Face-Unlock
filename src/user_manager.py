@@ -37,9 +37,16 @@ class UserManager:
             except Exception as e:
                 print(f"[UserManager] Migration error: {e}")
 
-        self.export_csv()
+        # Only export to disk in persistent environments
+        if not config.IS_VERCEL:
+            self.export_csv()
+
 
     def save_database(self):
+        if config.IS_VERCEL:
+            # On Vercel (stateless/read-only disk), skip file writes.
+            # All persistence is handled via Supabase directly.
+            return
         try:
             with open(self.db_path, "w") as f:
                 json.dump(self.users, f, indent=2)
@@ -47,6 +54,7 @@ class UserManager:
             self.export_excel()
         except Exception as e:
             print(f"[UserManager] DB save error: {e}")
+
 
     def export_excel(self):
         """Export user metadata, face photo, social links, and uploaded PDFs to CSV and native XLSX Excel file."""
@@ -324,10 +332,16 @@ class UserManager:
     # PER-USER SHORTCUTS CRUD
     # ─────────────────────────────────────────────────────────
     def get_shortcuts(self, user_id):
+        # On Vercel, shortcuts are the source of truth in Supabase
+        if config.IS_VERCEL and supabase.enabled:
+            cloud_shortcuts = supabase.fetch_shortcuts(user_id)
+            if cloud_shortcuts is not None:
+                return cloud_shortcuts
         user = self.get_user(user_id)
         if not user:
             return []
         return user.get("shortcuts", [])
+
 
     def add_shortcut(self, user_id, name, url, icon="🔗", color="#4facfe", stype="link"):
         user = self.get_user(user_id)
@@ -346,9 +360,14 @@ class UserManager:
             "added_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
         user.setdefault("shortcuts", []).append(shortcut)
-        self.save_database()
-        supabase.sync_shortcut(user_id, shortcut)
+        # On Vercel we skip disk writes; sync directly to Supabase
+        if config.IS_VERCEL:
+            supabase.sync_shortcut(user_id, shortcut)
+        else:
+            self.save_database()
+            supabase.sync_shortcut(user_id, shortcut)
         return shortcut
+
 
     def update_shortcut(self, user_id, shortcut_id, name=None, url=None, icon=None, color=None):
         user = self.get_user(user_id)
@@ -360,19 +379,29 @@ class UserManager:
                 if url: s["url"] = url
                 if icon: s["icon"] = icon
                 if color: s["color"] = color
-                self.save_database()
+                if not config.IS_VERCEL:
+                    self.save_database()
                 supabase.sync_shortcut(user_id, s)
                 return True
+
         return False
 
     def delete_shortcut(self, user_id, shortcut_id):
-        user = self.users.get(user_id)
+        user = self.get_user(user_id)
         if not user:
             return False
         original = user.get("shortcuts", [])
         updated = [s for s in original if s["id"] != shortcut_id]
         if len(updated) < len(original):
             user["shortcuts"] = updated
-            self.save_database()
+            if not config.IS_VERCEL:
+                self.save_database()
+            # Also delete from Supabase
+            supabase.delete_shortcut(shortcut_id)
             return True
+        # If not in local memory (Vercel), delete directly from Supabase
+        if config.IS_VERCEL:
+            return supabase.delete_shortcut(shortcut_id)
         return False
+
+

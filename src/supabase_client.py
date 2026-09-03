@@ -82,6 +82,31 @@ class SupabaseClient:
         except Exception as e:
             print(f"[Supabase] Shortcut sync error: {e}")
             return False
+    def fetch_shortcuts(self, user_id):
+        """Fetch all shortcuts for a user from Supabase 'shortcuts' table."""
+        if not self.enabled:
+            return None
+        try:
+            endpoint = f"{self.url}/rest/v1/shortcuts?user_id=eq.{user_id}&select=*&order=added_at.asc"
+            res = requests.get(endpoint, headers=self._headers(), timeout=5)
+            if res.status_code == 200:
+                return res.json()
+            return None
+        except Exception as e:
+            print(f"[Supabase] Fetch shortcuts error: {e}")
+            return None
+
+    def delete_shortcut(self, shortcut_id):
+        """Delete a shortcut from Supabase 'shortcuts' table by id."""
+        if not self.enabled:
+            return False
+        try:
+            endpoint = f"{self.url}/rest/v1/shortcuts?id=eq.{shortcut_id}"
+            res = requests.delete(endpoint, headers=self._headers(), timeout=5)
+            return res.status_code in (200, 204)
+        except Exception as e:
+            print(f"[Supabase] Delete shortcut error: {e}")
+            return False
 
 
 supabase = SupabaseClient()
